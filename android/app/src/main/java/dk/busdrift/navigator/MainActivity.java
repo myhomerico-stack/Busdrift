@@ -74,7 +74,7 @@ public final class MainActivity extends Activity {
         final String server=base(),auth=token();
         executor.execute(()->{
             try{
-                URL url=new URL(server+"navigator-api.php?action="+endpoint);
+                URL url=new URL(server+"navigator-v3.php?action="+endpoint);
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();conn.setConnectTimeout(12000);conn.setReadTimeout(15000);
                 conn.setRequestProperty("Accept","application/json");if(!auth.isEmpty())conn.setRequestProperty("Authorization","Bearer "+auth);
                 if(body!=null){conn.setRequestMethod("POST");conn.setDoOutput(true);conn.setRequestProperty("Content-Type","application/json; charset=utf-8");
@@ -83,7 +83,7 @@ public final class MainActivity extends Activity {
                 ByteArrayOutputStream bytes=new ByteArrayOutputStream();if(input!=null)try(InputStream stream=input){byte[] buffer=new byte[4096];int read;
                     while((read=stream.read(buffer))!=-1){bytes.write(buffer,0,read);if(bytes.size()>1500000)throw new Exception("Svaret er for stort.");}}
                 conn.disconnect();String raw=bytes.toString("UTF-8");
-                if(!raw.trim().startsWith("{"))throw new Exception("Serveren returnerer ikke JSON (HTTP "+status+"). Kontrollér at navigator-api.php ligger ved siden af api.php på serveren.");
+                if(!raw.trim().startsWith("{"))throw new Exception("Serveren returnerer ikke JSON (HTTP "+status+"). Kontrollér at navigator-v3.php ligger ved siden af api.php på serveren.");
                 JSONObject result=new JSONObject(raw);
                 if(status>=400||result.has("error")){int errorCode=result.optInt("status",status);String error=result.optString("error","Serverfejl");
                     main.post(()->{if(errorCode==401&&!auth.isEmpty()){setAuth(server,"");stopGps();loginScreen();}message(error);});return;}

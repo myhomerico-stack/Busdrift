@@ -60,7 +60,7 @@ public class GpsService extends Service implements LocationListener {
         network.execute(()->{
             try {
                 JSONObject data=new JSONObject();data.put("tourId",id);data.put("latitude",loc.getLatitude());data.put("longitude",loc.getLongitude());data.put("accuracy",loc.getAccuracy());
-                HttpURLConnection conn=(HttpURLConnection)new URL(endpoint+"navigator-api.php?action=position").openConnection();
+                HttpURLConnection conn=(HttpURLConnection)new URL(endpoint+"navigator-v3.php?action=position").openConnection();
                 conn.setConnectTimeout(8000);conn.setReadTimeout(8000);conn.setRequestMethod("POST");conn.setDoOutput(true);
                 conn.setRequestProperty("Authorization","Bearer "+auth);conn.setRequestProperty("Content-Type","application/json; charset=utf-8");
                 try(OutputStream out=conn.getOutputStream()){out.write(data.toString().getBytes(StandardCharsets.UTF_8));}

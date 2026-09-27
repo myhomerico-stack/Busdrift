@@ -90,7 +90,7 @@ public final class NavigationActivity extends Activity implements LocationListen
         worker.execute(()->{
             try {
                 JSONObject body=new JSONObject();body.put("latitude",loc.getLatitude());body.put("longitude",loc.getLongitude());body.put("key",key);
-                HttpURLConnection con=(HttpURLConnection)new URL(base+"navigator-api.php?action=navigate").openConnection();
+                HttpURLConnection con=(HttpURLConnection)new URL(base+"navigator-v3.php?action=navigate").openConnection();
                 con.setConnectTimeout(12000);con.setReadTimeout(22000);con.setRequestMethod("POST");con.setDoOutput(true);
                 con.setRequestProperty("Authorization","Bearer "+token);con.setRequestProperty("Accept","application/json");con.setRequestProperty("Content-Type","application/json; charset=utf-8");
                 try(OutputStream out=con.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));}
@@ -100,7 +100,7 @@ public final class NavigationActivity extends Activity implements LocationListen
                     if(response.has("error"))throw new Exception(response.optString("error"));
                     main.post(()->updateRoute(response));
                 }finally{con.disconnect();}
-            }catch(Exception e){main.post(()->status.setText("Ruten kunne ikke opdateres: "+e.getMessage()));}
+            }catch(Exception e){main.post(()->{eta.setText("Rute ikke tilgængelig");status.setText("Ruten kunne ikke opdateres: "+e.getMessage());});}
             finally{main.post(()->fetching=false);}
         });
     }
