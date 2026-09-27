@@ -6,7 +6,7 @@ Android app og PHP 8.0 API til eksisterende Busdrift på `https://minside.hotser
 
 1. Administrator tildeler én eller flere ture til chaufføren, vælger garage og bus, og sørger for, at garage og turens stop har adresser. Chaufføren får sit eksisterende chaufførnummer og PIN under **Chaufførportal**.
 2. Chaufføren logger ind i appen. Dagens ture vises i tidsorden. Appen laver en stopliste: **garage → alle kundestop → tilbage til garage**. Hvis dagens ture bruger forskellige garager eller busser, indsættes et returbesøg og en ny start ved garagen, når garage eller bus skifter.
-3. Chaufføren trykker **Start kørslen fra garagen**. Navigation til næste adresse åbnes i telefonens navigationsapp. Ved hvert stop markeres **Jeg er ankommet**, hvorefter appen åbner navigation til næste stop. GPS deles under kørslen, hvis chaufføren giver placeringstilladelse.
+3. Chaufføren trykker **Start kørslen fra garagen**. Appens egen kortskærm viser rute, GPS-position, vejvisning, resterende kilometer og nedtælling i timer:minutter:sekunder til næste stop. Ruten genberegnes cirka hvert 25. sekund under kørsel. Ved hvert stop markeres **Jeg er ankommet**, hvorefter næste stop åbnes. GPS deles under kørslen, hvis chaufføren giver placeringstilladelse.
 4. Chaufføren markerer ankomsten til garagen og trykker **Afslut dagen og log ud**. Serveren registrerer afslutning og lukker den aktuelle telefons adgangsnøgle. En tidlig manuel logout afslutter ikke dagen.
 
 ## Installation på PHP-server
@@ -23,11 +23,15 @@ Projektet kan ligge i [myhomerico-stack/Busdrift](https://github.com/myhomerico-
 
 Alternativt: åbn `android` i Android Studio (JDK 17, Android SDK 35, Gradle 8.9), og byg `:app:assembleDebug`. Koden er skrevet uden eksterne Android-biblioteker.
 
+## Kort og ruteopsætning
+
+Indstil **lokal OSRM og lokal adresseserver** under Database i Busdrift. Navigator bruger serverens eksisterende `data/settings.php` og får kun den beregnede rute fra `navigator-api.php`. Android-telefonen får aldrig direkte adgang til de lokale OSRM-porte. Kortfliser kommer fra OpenStreetMap over HTTPS med synlig kreditering og HTTP-cache på telefonen. GPS, mobildata og adgang til kortfliser er nødvendige for løbende kortnavigation. Hvis ruteserveren ikke svarer, fortæller appen det på kortskærmen. Opdatér både APK og `navigator-api.php` ved opgradering fra version 1.
+
 ## Grænser og afprøvning
 
 - Telefonen skal kunne nå `https://minside.hotservice.dk/navigator-api.php` via mobilnettet. Appen fungerer ikke ude på ruten, hvis PHP kun er tilgængelig på et lokalt 192.168-netværk. Kontroller HTTPS og PHP, før den tages i brug.
-- Navigationsappen skal være installeret på telefonen. Denne første version åbner næste adresse i en ekstern kortapp. Den kan ikke garantere ruter, der passer til bussens højde, bredde eller vægt; brug en kortapp med passende busprofil.
+- OSRM-profilen `driving` tager ikke nødvendigvis højde for bussens højde, bredde, vægt eller lokale restriktioner. Chaufføren skal følge skiltning og kontrollere ruten for busrestriktioner, inden turen køres.
 - En aktiv internetforbindelse er nødvendig for at hente og registrere stop. Fejler registreringen, forbliver stoppet aktivt, så chaufføren kan prøve igen.
 - Hvis en telefons adgang skal spærres, kan en administrator sætte dens række i `navigator_devices.revoked_at`. Logout spærrer automatisk den aktuelle nøgle.
 
-Afprøv med en testchauffør, en garage med adresse og en tur med to stop: log ind, start dagen, kør stop i rækkefølge, markér garagereturen, afslut og kontrollér ny login er påkrævet. Projektet er ikke verificeret mod den aktive server eller bygget til APK i dette arbejdsrum.
+Afprøv med en testchauffør, en garage med adresse og en tur med to stop: log ind, start dagen, kontrollér kort, vejvisning og nedtælling, kør stop i rækkefølge, markér garagereturen, afslut og kontrollér ny login er påkrævet. Projektet er ikke verificeret mod den aktive server.

@@ -85,6 +85,48 @@ function route(PDO $db, int $driverId, string $date): array {
     $done=(bool)q($db,'SELECT completed_at FROM navigator_days WHERE driver_id=? AND work_date=?',[$driverId,$date])->fetchColumn();
     return ['date'=>$date,'tours'=>$summaries,'waypoints'=>$waypoints,'completed'=>$done];
 }
+function navigationJson(string $url): array {
+    if (!function_exists('curl_init')) answer(503,['error'=>'PHP cURL mangler til navigation.']);
+    $ch=curl_init($url);
+    curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_MAXREDIRS=>0,CURLOPT_HTTPHEADER=>['Accept: application/json','User-Agent: Busdrift-Navigator/2.0']]);
+    $body=curl_exec($ch);$status=curl_getinfo($ch,CURLINFO_RESPONSE_CODE);curl_close($ch);
+    if ($body===false || $status!==200 || strlen($body)>4000000) answer(502,['error'=>'Ruteserveren svarer ikke. Kontroller OSRM og adresseopslag under Database.']);
+    $json=json_decode($body,true);
+    if (!is_array($json)) answer(502,['error'=>'Ruteserveren gav et ugyldigt svar.']);
+    return $json;
+}
+function navUrl(string $base,string $path,array $params=[]): string {
+    $p=parse_url($base);
+    if (!is_array($p) || !in_array($p['scheme']??'',['http','https'],true) || empty($p['host']) || isset($p['user']) || isset($p['pass']) || isset($p['query']) || isset($p['fragment'])) answer(503,['error'=>'Ruteopsætningen under Database er ugyldig.']);
+    return rtrim($base,'/').'/'.ltrim($path,'/').($params?'?'.http_build_query($params,'','&',PHP_QUERY_RFC3986):'');
+}
+function navigation(PDO $db,int $driverId,array $settings,array $input): void {
+    $local=$settings['localRouting']??null;
+    if (!is_array($local) || empty($local['osrmUrl']) || empty($local['geocoderUrl'])) answer(409,['error'=>'Indstil den lokale OSRM og adresseserver under Database for at bruge kortnavigation.']);
+    $lat=filter_var($input['latitude']??null,FILTER_VALIDATE_FLOAT);$lon=filter_var($input['longitude']??null,FILTER_VALIDATE_FLOAT);
+    $key=(string)($input['key']??'');
+    if ($lat===false || $lon===false || $lat===null || $lon===null || abs($lat)>90 || abs($lon)>180 || strlen($key)>100) answer(400,['error'=>'GPS-position eller stop er ugyldigt.']);
+    $today=date('Y-m-d');$day=route($db,$driverId,$today);$next=null;
+    foreach($day['waypoints'] as $point) if (!$point['done']) { $next=$point;break; }
+    if (!$next || $next['key']!==$key || $next['type']==='garage_start' || $day['completed']) answer(409,['error'=>'Dette er ikke næste stop på dagens rute.']);
+    $address=$next['address'];
+    $geocode=navigationJson(navUrl((string)$local['geocoderUrl'],'search',['q'=>$address,'format'=>'jsonv2','addressdetails'=>1,'limit'=>5]));
+    $postcode=preg_match('/\b(\d{4})\b/',$address,$m)?$m[1]:null;
+    $target=null;
+    foreach($geocode as $candidate) if(is_array($candidate) && isset($candidate['lat'],$candidate['lon']) && (!$postcode || ($candidate['address']['postcode']??'')===$postcode)) { $target=$candidate;break; }
+    if (!$target) answer(422,['error'=>'Stoppets adresse kunne ikke findes: '.$address]);
+    $coords=$lon.','.$lat.';'.$target['lon'].','.$target['lat'];
+    $osrm=navigationJson(navUrl((string)$local['osrmUrl'],'route/v1/driving/'.$coords,['overview'=>'full','steps'=>'true','geometries'=>'geojson']));
+    $path=$osrm['routes'][0]??null;
+    if (!is_array($path) || !isset($path['duration'],$path['distance'],$path['geometry']['coordinates'],$path['legs'][0]['steps'])) answer(502,['error'=>'OSRM fandt ingen rute til næste stop.']);
+    $steps=[];
+    foreach($path['legs'][0]['steps'] as $step) {
+        $maneuver=$step['maneuver']??[];$location=$maneuver['location']??[];
+        if (!isset($location[0],$location[1])) continue;
+        $steps[]=['type'=>(string)($maneuver['type']??''),'modifier'=>(string)($maneuver['modifier']??''),'road'=>(string)($step['name']??''),'distance'=>(float)($step['distance']??0),'lon'=>(float)$location[0],'lat'=>(float)$location[1]];
+    }
+    answer(200,['key'=>$key,'address'=>$address,'duration'=>(int)ceil($path['duration']),'distance'=>(int)ceil($path['distance']),'geometry'=>$path['geometry']['coordinates'],'steps'=>$steps]);
+}
 function login(PDO $db, array $input): void {
     $number=trim((string)($input['number']??'')); $pin=(string)($input['pin']??'');
     if ($number==='' || strlen($number)>50 || strlen($pin)>200) answer(400,['error'=>'Indtast chaufførnummer og PIN.']);
@@ -123,6 +165,7 @@ try {
     if ($action==='login' && $method==='POST') login($db,requestBody());
     $driver=authorized($db);$id=$driver['id'];
     if ($action==='day' && $method==='GET') { $result=route($db,$id,workDate(isset($_GET['date'])?(string)$_GET['date']:null));$result['driver']=['number'=>$driver['number'],'name'=>$driver['name']];answer(200,$result); }
+    if ($action==='navigate' && $method==='POST') navigation($db,$id,$settings,requestBody());
     if ($action==='waypoint' && $method==='POST') {
         $input=requestBody();$date=workDate((string)($input['date']??''));$key=(string)($input['key']??'');
         if ($date!==date('Y-m-d')) answer(400,['error'=>'Kun dagens kørsler kan udføres.']);

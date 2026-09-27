@@ -40,12 +40,15 @@ public final class MainActivity extends Activity {
     private static LocalDate today(){return LocalDate.now(ZoneId.of("Europe/Copenhagen"));}
     private LocalDate selectedDate=today();
     private String notice="";
+    private String navigatingKey="";
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         getWindow().setStatusBarColor(Color.rgb(17,58,65));
+        if(saved!=null)navigatingKey=saved.getString("navigatingKey","");
         if(token().isEmpty()) loginScreen();else loadDay();
     }
+    @Override protected void onSaveInstanceState(Bundle out){out.putString("navigatingKey",navigatingKey);super.onSaveInstanceState(out);}
     @Override public void onDestroy() {executor.shutdownNow();super.onDestroy();}
     private String base(){return getPreferences(MODE_PRIVATE).getString("base",DEFAULT_SERVER);}
     private String token(){return getPreferences(MODE_PRIVATE).getString("token","");}
@@ -79,7 +82,9 @@ public final class MainActivity extends Activity {
                 int status=conn.getResponseCode();InputStream input=status>=400?conn.getErrorStream():conn.getInputStream();
                 ByteArrayOutputStream bytes=new ByteArrayOutputStream();if(input!=null)try(InputStream stream=input){byte[] buffer=new byte[4096];int read;
                     while((read=stream.read(buffer))!=-1){bytes.write(buffer,0,read);if(bytes.size()>1500000)throw new Exception("Svaret er for stort.");}}
-                conn.disconnect();JSONObject result=new JSONObject(bytes.toString("UTF-8"));
+                conn.disconnect();String raw=bytes.toString("UTF-8");
+                if(!raw.trim().startsWith("{"))throw new Exception("Serveren returnerer ikke JSON (HTTP "+status+"). Kontrollér at navigator-api.php ligger ved siden af api.php på serveren.");
+                JSONObject result=new JSONObject(raw);
                 if(status>=400||result.has("error")){int errorCode=result.optInt("status",status);String error=result.optString("error","Serverfejl");
                     main.post(()->{if(errorCode==401&&!auth.isEmpty()){setAuth(server,"");stopGps();loginScreen();}message(error);});return;}
                 main.post(()->{try{callback.accept(result);}catch(Exception e){message(e.getMessage());}});
@@ -129,7 +134,7 @@ public final class MainActivity extends Activity {
         if(next!=null){title("Næste stop");line(next.optString("title")+"\n"+next.optString("address"));
             if(next.optInt("pause")>0)line("Pause ved stop: "+next.optInt("pause")+" min.");
             if(today){
-                if(!next.optString("type").equals("garage_start"))action("Naviger til næste stop",()->navigate(next.optString("address")));
+                if(!next.optString("type").equals("garage_start"))action("Åbn kort og vejvisning",()->navigate(next));
                 String button=next.optString("type").equals("garage_start")?"Start kørslen fra garagen":
                     next.optString("type").equals("garage_return")?"Jeg er tilbage ved garagen":"Jeg er ankommet til stoppet";
                 action(button,()->completePoint(next));
@@ -139,24 +144,31 @@ public final class MainActivity extends Activity {
             JSONObject p=route.optJSONObject(i);if(p==null)continue;
             line((p.optBoolean("done")?"✓  ":"○  ")+(i+1)+". "+p.optString("title")+" · "+p.optString("address"));
         }
-        if(today)line("Navigationen åbner din kortapp til ét stop ad gangen. Vælg busprofil i kortappen, hvis din bus kræver det.");
+        if(today)line("Kort, vejvisning og nedtælling vises i appen. OSRM beregner ikke busbegrænsninger som højde og vægt.");
         manualLogout();
     }
     private void completePoint(JSONObject point){
         try{JSONObject body=new JSONObject();body.put("date",selectedDate.toString());body.put("key",point.getString("key"));
             request("waypoint",body,result->{
                 request("day&date="+selectedDate,null,newDay->{day=newDay;showDay();JSONObject next=nextPoint();
-                    if(next!=null&&!next.optString("type").equals("garage_start")){startGps(next.optInt("tourId"));navigate(next.optString("address"));}
+                    if(next!=null&&!next.optString("type").equals("garage_start")){startGps(next.optInt("tourId"));navigate(next);}
                     if(next==null)stopGps();
                 });
             });
         }catch(Exception e){message(e.getMessage());}
     }
-    private void navigate(String address){
-        if(address.trim().isEmpty()){message("Stoppet mangler adresse.");return;}
-        try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("google.navigation:q="+Uri.encode(address))));}
-        catch(Exception e){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.google.com/maps/dir/?api=1&destination="+Uri.encode(address))));}
-            catch(Exception ignored){message("Ingen navigationsapp er installeret.");}}
+    private void navigate(JSONObject point){
+        String address=point.optString("address");if(address.trim().isEmpty()){message("Stoppet mangler adresse.");return;}
+        navigatingKey=point.optString("key");
+        Intent intent=new Intent(this,NavigationActivity.class);
+        intent.putExtra("key",navigatingKey);intent.putExtra("base",base());intent.putExtra("token",token());intent.putExtra("address",address);
+        startActivityForResult(intent,44);
+    }
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);
+        if(request==44&&result==RESULT_OK){JSONObject point=nextPoint();
+            if(point!=null&&navigatingKey.equals(point.optString("key")))completePoint(point);
+        }
+        navigatingKey="";
     }
     private void startGps(int tour){
         if(tour<1)return;
