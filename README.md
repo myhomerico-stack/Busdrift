@@ -1,6 +1,6 @@
 # Busdrift Navigator til chauffører
 
-Android app og PHP 8.0 API til eksisterende Busdrift på `https://minside.hotservice.dk/`. Appen læser **ikke MySQL direkte**: `server/navigator-v3.php` bruger den allerede gemte `data/settings.php` på webserveren. Filen `settings.php` må ikke kopieres til appen eller GitHub.
+Android app og PHP 8.0 API til eksisterende Busdrift på `https://minside.hotservice.dk/`. Appen læser **ikke MySQL direkte**: `server/navigator-v4.php` bruger den allerede gemte `data/settings.php` på webserveren. Filen `settings.php` må ikke kopieres til appen eller GitHub.
 
 ## Kørsel på en arbejdsdag
 
@@ -11,7 +11,7 @@ Android app og PHP 8.0 API til eksisterende Busdrift på `https://minside.hotser
 
 ## Installation på PHP-server
 
-Upload **kun** `server/navigator-v3.php` til den mappe på PHP-serveren, der indeholder `api.php`, fx roden på `minside.hotservice.dk`. Den forventer at læse `data/settings.php` under **samme mappe**. Hvis siden ligger i en undermappe, tilpas serveradressen på login-skærmen til undermappen. Brug ikke URL'en til `data/settings.php` i appen.
+Upload **kun** `server/navigator-v4.php` til den mappe på PHP-serveren, der indeholder `api.php`, fx roden på `minside.hotservice.dk`. Den forventer at læse `data/settings.php` under **samme mappe**. Hvis siden ligger i en undermappe, tilpas serveradressen på login-skærmen til undermappen. Brug ikke URL'en til `data/settings.php` i appen.
 
 Ved første kald oprettes tabellerne `navigator_devices`, `navigator_login_limits`, `navigator_days`, `navigator_waypoints` og `navigator_positions` i samme MySQL-database. PHP kræver `pdo_mysql` og MySQL-brugerens rettighed til at oprette tabeller. Den eksisterende databaseopsætning, ture, chauffører, garager og busser ændres ikke. HTTPS er påkrævet for chaufførlogin fra appen.
 
@@ -25,11 +25,11 @@ Alternativt: åbn `android` i Android Studio (JDK 17, Android SDK 35, Gradle 8.9
 
 ## Kort og ruteopsætning
 
-Indstil **lokal OSRM og lokal adresseserver** under Database i Busdrift. Navigator bruger serverens eksisterende `data/settings.php` og får kun den beregnede rute fra `navigator-v3.php`. Android-telefonen får aldrig direkte adgang til de lokale OSRM-porte. Kortfliser kommer fra OpenStreetMap over HTTPS med synlig kreditering og HTTP-cache på telefonen. GPS, mobildata og adgang til kortfliser er nødvendige for løbende kortnavigation. Hvis ruteserveren ikke svarer, fortæller appen det på kortskærmen. Opdatér både APK og `navigator-v3.php` ved opgradering fra version 1.
+Indstil **lokal OSRM og lokal adresseserver** under Database i Busdrift. Navigator bruger serverens eksisterende `data/settings.php` og får kun den beregnede rute fra `navigator-v4.php`. Android-telefonen får aldrig direkte adgang til de lokale OSRM-porte. Kortfliser kommer fra OpenStreetMap over HTTPS med synlig kreditering og HTTP-cache på telefonen. GPS, mobildata og adgang til kortfliser er nødvendige for løbende kortnavigation. Hvis ruteserveren ikke svarer, fortæller appen det på kortskærmen. Opdatér både APK og `navigator-v4.php` ved opgradering fra version 1.
 
 ## Grænser og afprøvning
 
-- Telefonen skal kunne nå `https://minside.hotservice.dk/navigator-v3.php` via mobilnettet. Appen fungerer ikke ude på ruten, hvis PHP kun er tilgængelig på et lokalt 192.168-netværk. Kontroller HTTPS og PHP, før den tages i brug.
+- Telefonen skal kunne nå `https://minside.hotservice.dk/navigator-v4.php` via mobilnettet. Appen fungerer ikke ude på ruten, hvis PHP kun er tilgængelig på et lokalt 192.168-netværk. Kontroller HTTPS og PHP, før den tages i brug.
 - OSRM-profilen `driving` tager ikke nødvendigvis højde for bussens højde, bredde, vægt eller lokale restriktioner. Chaufføren skal følge skiltning og kontrollere ruten for busrestriktioner, inden turen køres.
 - En aktiv internetforbindelse er nødvendig for at hente og registrere stop. Fejler registreringen, forbliver stoppet aktivt, så chaufføren kan prøve igen.
 - Hvis en telefons adgang skal spærres, kan en administrator sætte dens række i `navigator_devices.revoked_at`. Logout spærrer automatisk den aktuelle nøgle.
@@ -38,4 +38,6 @@ Afprøv med en testchauffør, en garage med adresse og en tur med to stop: log i
 
 ## Tjek at den nye PHP-fil bruges
 
-Åbn `https://minside.hotservice.dk/navigator-v3.php?action=version` i en browser. Svaret skal være JSON med `"apiVersion":3`. Hvis du ser en HTML-fejlside, ligger filen ikke i samme offentlige mappe som `api.php`. Denne kontrol læser ikke databaseindstillinger eller chaufførdata. Åbn derefter den nye APK. Den gamle `navigator-api.php` kan stå urørt.
+Åbn `https://minside.hotservice.dk/navigator-v4.php?action=version` i en browser. Svaret skal være JSON med `"apiVersion":4`. Hvis du ser en HTML-fejlside, ligger filen ikke i samme offentlige mappe som `api.php`. Denne kontrol læser ikke databaseindstillinger eller chaufførdata. Åbn derefter den nye APK. Den gamle `navigator-api.php` kan stå urørt.
+
+Kortet har knapper til +, − og automatisk zoom centreret på GPS med cirka 200 meter til kanten. Hvis appen viser en rute-fejl, vises det om det er adresseopslag eller OSRM, inklusive HTTP- eller cURL-fejl. Kontrollér først `navigator-v4.php?action=version` og at svaret har `apiVersion:4` og `diagnostics:"4.0"`.

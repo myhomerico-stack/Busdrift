@@ -54,6 +54,10 @@ public final class NavigationActivity extends Activity implements LocationListen
         eta=label("Afventer GPS …",21,true);root.addView(eta);
         distance=label("",16,false);root.addView(distance);
         map=new RouteMapView(this);root.addView(map,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout zoomControls=new LinearLayout(this);zoomControls.setOrientation(LinearLayout.HORIZONTAL);root.addView(zoomControls);
+        Button minus=new Button(this);minus.setText("−");zoomControls.addView(minus,new LinearLayout.LayoutParams(0,-2,1));minus.setOnClickListener(v->map.zoomOut());
+        Button auto=new Button(this);auto.setText("Auto · 200 m");zoomControls.addView(auto,new LinearLayout.LayoutParams(0,-2,2));auto.setOnClickListener(v->map.autoZoom());
+        Button plus=new Button(this);plus.setText("+");zoomControls.addView(plus,new LinearLayout.LayoutParams(0,-2,1));plus.setOnClickListener(v->map.zoomIn());
         status=label("Følg vejen og hold øje med trafikken. Kortets rute tager ikke højde for bussens mål.",14,false);root.addView(status);
         Button arrived=new Button(this);arrived.setText("Jeg er ankommet til stoppet");root.addView(arrived);
         arrived.setOnClickListener(v->{setResult(RESULT_OK);finish();});
@@ -90,7 +94,7 @@ public final class NavigationActivity extends Activity implements LocationListen
         worker.execute(()->{
             try {
                 JSONObject body=new JSONObject();body.put("latitude",loc.getLatitude());body.put("longitude",loc.getLongitude());body.put("key",key);
-                HttpURLConnection con=(HttpURLConnection)new URL(base+"navigator-v3.php?action=navigate").openConnection();
+                HttpURLConnection con=(HttpURLConnection)new URL(base+"navigator-v4.php?action=navigate").openConnection();
                 con.setConnectTimeout(12000);con.setReadTimeout(22000);con.setRequestMethod("POST");con.setDoOutput(true);
                 con.setRequestProperty("Authorization","Bearer "+token);con.setRequestProperty("Accept","application/json");con.setRequestProperty("Content-Type","application/json; charset=utf-8");
                 try(OutputStream out=con.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));}

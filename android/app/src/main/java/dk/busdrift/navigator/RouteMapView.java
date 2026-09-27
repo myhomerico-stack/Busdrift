@@ -22,7 +22,9 @@ import java.util.concurrent.Executors;
 
 /** Kort med OSM-kortfliser, rute og GPS-position. Henter kun fliser, der vises. */
 public final class RouteMapView extends View {
-    private static final int ZOOM=15, SIZE=256;
+    private static final int SIZE=256;
+    private int zoom=16;
+    private boolean automatic=true;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final ExecutorService downloads=Executors.newFixedThreadPool(3);
     private final LruCache<String,Bitmap> images=new LruCache<String,Bitmap>(48){
@@ -38,18 +40,26 @@ public final class RouteMapView extends View {
         super(context);
         try {if(HttpResponseCache.getInstalled()==null) HttpResponseCache.install(new File(context.getCacheDir(),"osm-http"),32L*1024*1024);}catch(Exception ignored){}
     }
-    public void position(double latitude,double longitude){lat=latitude;lon=longitude;hasPosition=true;invalidate();}
+    public void position(double latitude,double longitude){lat=latitude;lon=longitude;hasPosition=true;if(automatic)fit200m();invalidate();}
+    public void zoomIn(){automatic=false;zoom=Math.min(19,zoom+1);invalidate();}
+    public void zoomOut(){automatic=false;zoom=Math.max(12,zoom-1);invalidate();}
+    public void autoZoom(){automatic=true;fit200m();invalidate();}
+    @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){super.onSizeChanged(w,h,oldw,oldh);if(automatic)fit200m();}
+    private void fit200m(){int pixels=Math.min(getWidth(),getHeight());if(pixels<1)return;
+        double ratio=Math.cos(Math.toRadians(lat))*40075017.0*pixels/(256.0*400.0);
+        zoom=Math.max(12,Math.min(19,(int)Math.round(Math.log(ratio)/Math.log(2))));
+    }
     public void route(JSONArray coordinates){geometry=coordinates;invalidate();}
     public void close(){downloads.shutdownNow();}
-    private static double x(double longitude){return (longitude+180.0)/360.0*(1<<ZOOM)*SIZE;}
-    private static double y(double latitude){double a=Math.toRadians(Math.max(-85,Math.min(85,latitude)));return (1-Math.log(Math.tan(a)+1/Math.cos(a))/Math.PI)/2*(1<<ZOOM)*SIZE;}
+    private double x(double longitude){return (longitude+180.0)/360.0*(1<<zoom)*SIZE;}
+    private double y(double latitude){double a=Math.toRadians(Math.max(-85,Math.min(85,latitude)));return (1-Math.log(Math.tan(a)+1/Math.cos(a))/Math.PI)/2*(1<<zoom)*SIZE;}
     @Override protected void onDraw(Canvas c){
         c.drawColor(Color.rgb(230,238,233));
         double cx=x(lon),cy=y(lat);int left=(int)Math.floor((cx-getWidth()/2.0)/SIZE),right=(int)Math.floor((cx+getWidth()/2.0)/SIZE);
         int top=(int)Math.floor((cy-getHeight()/2.0)/SIZE),bottom=(int)Math.floor((cy+getHeight()/2.0)/SIZE);
         for(int ty=top;ty<=bottom;ty++)for(int tx=left;tx<=right;tx++){
-            if(tx<0||tx>=(1<<ZOOM)||ty<0||ty>=(1<<ZOOM))continue;
-            String key=ZOOM+"/"+tx+"/"+ty;Bitmap tile=images.get(key);
+            if(tx<0||tx>=(1<<zoom)||ty<0||ty>=(1<<zoom))continue;
+            String key=zoom+"/"+tx+"/"+ty;Bitmap tile=images.get(key);
             float px=(float)(tx*SIZE-cx+getWidth()/2.0),py=(float)(ty*SIZE-cy+getHeight()/2.0);
             if(tile!=null){paint.setColor(Color.WHITE);c.drawBitmap(tile,px,py,paint);}else loadTile(key);
         }
@@ -75,7 +85,7 @@ public final class RouteMapView extends View {
             Bitmap bitmap=null;
             try {
                 HttpURLConnection con=(HttpURLConnection)new URL("https://tile.openstreetmap.org/"+key+".png").openConnection();
-                con.setRequestProperty("User-Agent","Busdrift-Navigator/2.0 (dk.busdrift.navigator)");con.setConnectTimeout(7000);con.setReadTimeout(7000);con.setUseCaches(true);
+                con.setRequestProperty("User-Agent","Busdrift-Navigator/4.0 (dk.busdrift.navigator)");con.setConnectTimeout(7000);con.setReadTimeout(7000);con.setUseCaches(true);
                 if(con.getResponseCode()==200){try(java.io.InputStream input=con.getInputStream()){bitmap=BitmapFactory.decodeStream(input);}}con.disconnect();
             }catch(Exception ignored){}
             Bitmap result=bitmap;
