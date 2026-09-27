@@ -35,6 +35,7 @@ function initialize(PDO $db): void {
     $db->exec('CREATE TABLE IF NOT EXISTS navigator_waypoints (driver_id BIGINT UNSIGNED NOT NULL, work_date DATE NOT NULL, waypoint_key VARCHAR(100) NOT NULL, completed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(driver_id,work_date,waypoint_key)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
     $db->exec('CREATE TABLE IF NOT EXISTS navigator_positions (bus_id BIGINT UNSIGNED NOT NULL PRIMARY KEY, driver_id BIGINT UNSIGNED NOT NULL, tour_id BIGINT UNSIGNED NOT NULL, latitude DECIMAL(10,7) NOT NULL, longitude DECIMAL(10,7) NOT NULL, accuracy_m DECIMAL(8,2) NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
     $db->exec('CREATE TABLE IF NOT EXISTS navigator_worker_keys (id TINYINT UNSIGNED NOT NULL PRIMARY KEY, token_hash CHAR(64) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+    $db->exec('CREATE TABLE IF NOT EXISTS navigator_worker_status (id TINYINT UNSIGNED NOT NULL PRIMARY KEY, last_poll DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
     $db->exec('CREATE TABLE IF NOT EXISTS navigator_route_jobs (driver_id BIGINT UNSIGNED NOT NULL, work_date DATE NOT NULL, waypoint_key VARCHAR(100) NOT NULL, address VARCHAR(500) NOT NULL, latitude DECIMAL(10,7) NOT NULL, longitude DECIMAL(10,7) NOT NULL, requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, next_try DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, last_error VARCHAR(255) NOT NULL DEFAULT \'\', PRIMARY KEY(driver_id,work_date,waypoint_key), KEY (next_try)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
     $db->exec('CREATE TABLE IF NOT EXISTS navigator_route_results (driver_id BIGINT UNSIGNED NOT NULL, work_date DATE NOT NULL, waypoint_key VARCHAR(100) NOT NULL, origin_lat DECIMAL(10,7) NOT NULL, origin_lon DECIMAL(10,7) NOT NULL, route_json MEDIUMTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(driver_id,work_date,waypoint_key)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 }
@@ -114,13 +115,22 @@ function navigation(PDO $db,int $driverId,array $input): void {
     if (!$job || metersBetween($lat,$lon,(float)$job['latitude'],(float)$job['longitude'])>60 || strtotime($job['requested_at'].' UTC')<time()-60) {
         q($db,'INSERT INTO navigator_route_jobs(driver_id,work_date,waypoint_key,address,latitude,longitude,requested_at,next_try,last_error) VALUES(?,?,?,?,?,?,UTC_TIMESTAMP(),UTC_TIMESTAMP(),?) ON DUPLICATE KEY UPDATE address=VALUES(address),latitude=VALUES(latitude),longitude=VALUES(longitude),requested_at=VALUES(requested_at),next_try=VALUES(next_try),last_error=VALUES(last_error)',[$driverId,$today,$key,$next['address'],$lat,$lon,'']);
     }
-    answer(200,['pending'=>true,'message'=>!empty($job['last_error'])?(string)$job['last_error']:'Ruten beregnes på Windows-pc og gemmes i MySQL.']);
+    $message=(string)($job['last_error']??'');
+    if ($message==='') {
+        $hasWorker=q($db,'SELECT 1 FROM navigator_worker_keys WHERE id=1')->fetchColumn();
+        $lastPoll=q($db,'SELECT last_poll FROM navigator_worker_status WHERE id=1')->fetchColumn();
+        if (!$hasWorker) $message='Windows-rutearbejderen er ikke sat op. Log ind som administrator og opret nøglen på navigator-v5.php?action=worker-setup.';
+        elseif (!$lastPoll || strtotime($lastPoll.' UTC')<time()-60) $message='Windows-rutearbejderen er ikke forbundet. Start den på pc’en, og se dens log.';
+        else $message='Ruten beregnes på Windows-pc og gemmes i MySQL. Arbejderen er forbundet.';
+    }
+    answer(200,['pending'=>true,'message'=>$message]);
 }
 function workerAuthorized(PDO $db): void {
     $token=(string)($_SERVER['HTTP_X_NAVIGATOR_WORKER_TOKEN']??'');
     if (!preg_match('/^[a-f0-9]{64}$/D',$token)) answer(403,['error'=>'Arbejdernøglen mangler.']);
     $stored=q($db,'SELECT token_hash FROM navigator_worker_keys WHERE id=1')->fetchColumn();
     if (!$stored || !hash_equals((string)$stored,hash('sha256',$token))) answer(403,['error'=>'Arbejdernøglen er ugyldig.']);
+    q($db,'INSERT INTO navigator_worker_status(id,last_poll) VALUES(1,UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE last_poll=UTC_TIMESTAMP()');
 }
 function workerSetup(PDO $db,string $method): void {
     session_start(['cookie_httponly'=>true,'cookie_samesite'=>'Strict','use_strict_mode'=>true]);
