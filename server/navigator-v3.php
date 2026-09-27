@@ -8,7 +8,7 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 // Offentlig versionskontrol uden adgang til MySQL eller chaufførdata.
 if (($_GET['action'] ?? '') === 'version' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
-    echo json_encode(['navigator' => true, 'apiVersion' => 3, 'routeAction' => 'navigate']);
+    echo json_encode(['navigator' => true, 'apiVersion' => 3, 'diagnostics' => '3.1', 'routeAction' => 'navigate']);
     exit;
 }
 
@@ -90,14 +90,16 @@ function route(PDO $db, int $driverId, string $date): array {
     $done=(bool)q($db,'SELECT completed_at FROM navigator_days WHERE driver_id=? AND work_date=?',[$driverId,$date])->fetchColumn();
     return ['date'=>$date,'tours'=>$summaries,'waypoints'=>$waypoints,'completed'=>$done];
 }
-function navigationJson(string $url): array {
-    if (!function_exists('curl_init')) answer(503,['error'=>'PHP cURL mangler til navigation.']);
+function navigationJson(string $url, string $service): array {
+    if (!function_exists('curl_init')) answer(503,['error'=>'PHP cURL mangler til '.$service.'.']);
     $ch=curl_init($url);
     curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_MAXREDIRS=>0,CURLOPT_HTTPHEADER=>['Accept: application/json','User-Agent: Busdrift-Navigator/2.0']]);
-    $body=curl_exec($ch);$status=curl_getinfo($ch,CURLINFO_RESPONSE_CODE);curl_close($ch);
-    if ($body===false || $status!==200 || strlen($body)>4000000) answer(502,['error'=>'Ruteserveren svarer ikke. Kontroller OSRM og adresseopslag under Database.']);
+    $body=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);$errno=curl_errno($ch);curl_close($ch);
+    if ($body===false) answer(502,['error'=>$service.' kunne ikke kontaktes (cURL '.$errno.'). Tjek forbindelsen fra PHP-serveren til ruteserveren.']);
+    if ($status!==200) answer(502,['error'=>$service.' svarede HTTP '.$status.'. Kontrollér adressen under Database.']);
+    if (strlen($body)>4000000) answer(502,['error'=>$service.' sendte for mange data.']);
     $json=json_decode($body,true);
-    if (!is_array($json)) answer(502,['error'=>'Ruteserveren gav et ugyldigt svar.']);
+    if (!is_array($json)) answer(502,['error'=>$service.' sendte ikke gyldige JSON-data.']);
     return $json;
 }
 function navUrl(string $base,string $path,array $params=[]): string {
@@ -115,13 +117,13 @@ function navigation(PDO $db,int $driverId,array $settings,array $input): void {
     foreach($day['waypoints'] as $point) if (!$point['done']) { $next=$point;break; }
     if (!$next || $next['key']!==$key || $next['type']==='garage_start' || $day['completed']) answer(409,['error'=>'Dette er ikke næste stop på dagens rute.']);
     $address=$next['address'];
-    $geocode=navigationJson(navUrl((string)$local['geocoderUrl'],'search',['q'=>$address,'format'=>'jsonv2','addressdetails'=>1,'limit'=>5]));
+    $geocode=navigationJson(navUrl((string)$local['geocoderUrl'],'search',['q'=>$address,'format'=>'jsonv2','addressdetails'=>1,'limit'=>5]),'Adresseopslag');
     $postcode=preg_match('/\b(\d{4})\b/',$address,$m)?$m[1]:null;
     $target=null;
     foreach($geocode as $candidate) if(is_array($candidate) && isset($candidate['lat'],$candidate['lon']) && (!$postcode || ($candidate['address']['postcode']??'')===$postcode)) { $target=$candidate;break; }
     if (!$target) answer(422,['error'=>'Stoppets adresse kunne ikke findes: '.$address]);
     $coords=$lon.','.$lat.';'.$target['lon'].','.$target['lat'];
-    $osrm=navigationJson(navUrl((string)$local['osrmUrl'],'route/v1/driving/'.$coords,['overview'=>'full','steps'=>'true','geometries'=>'geojson']));
+    $osrm=navigationJson(navUrl((string)$local['osrmUrl'],'route/v1/driving/'.$coords,['overview'=>'full','steps'=>'true','geometries'=>'geojson']),'OSRM');
     $path=$osrm['routes'][0]??null;
     if (!is_array($path) || !isset($path['duration'],$path['distance'],$path['geometry']['coordinates'],$path['legs'][0]['steps'])) answer(502,['error'=>'OSRM fandt ingen rute til næste stop.']);
     $steps=[];
