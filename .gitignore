@@ -1,0 +1,10 @@
+# Undgå at sende databaseadgang, PIN-koder og builds til GitHub.
+**/data/
+**/settings.php
+**/.env*
+**/local.properties
+**/build/
+**/.gradle/
+*.apk
+*.jks
+*.keystore
