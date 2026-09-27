@@ -1,0 +1,13 @@
+services:
+  navigator-ruter:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    working_dir: /worker
+    command: ["python", "-u", "worker.py"]
+    volumes:
+      - ./worker.py:/worker/worker.py:ro
+    environment:
+      NAVIGATOR_SERVER: ${NAVIGATOR_SERVER:-https://minside.hotservice.dk}
+      NAVIGATOR_TOKEN: ${NAVIGATOR_TOKEN:?Kopier arbejder-noglen fra navigator-v5.php?action=worker-setup}
+      NOMINATIM_URL: ${NOMINATIM_URL:-http://host.docker.internal:8080}
+      OSRM_URL: ${OSRM_URL:-http://host.docker.internal:5000}

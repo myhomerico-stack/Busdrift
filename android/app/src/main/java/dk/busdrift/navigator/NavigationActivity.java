@@ -94,7 +94,7 @@ public final class NavigationActivity extends Activity implements LocationListen
         worker.execute(()->{
             try {
                 JSONObject body=new JSONObject();body.put("latitude",loc.getLatitude());body.put("longitude",loc.getLongitude());body.put("key",key);
-                HttpURLConnection con=(HttpURLConnection)new URL(base+"navigator-v4.php?action=navigate").openConnection();
+                HttpURLConnection con=(HttpURLConnection)new URL(base+"navigator-v5.php?action=navigate").openConnection();
                 con.setConnectTimeout(12000);con.setReadTimeout(22000);con.setRequestMethod("POST");con.setDoOutput(true);
                 con.setRequestProperty("Authorization","Bearer "+token);con.setRequestProperty("Accept","application/json");con.setRequestProperty("Content-Type","application/json; charset=utf-8");
                 try(OutputStream out=con.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));}
@@ -110,6 +110,11 @@ public final class NavigationActivity extends Activity implements LocationListen
     }
     private void updateRoute(JSONObject data){
         if(isFinishing())return;
+        if(data.optBoolean("pending")){
+            eta.setText("Ruten beregnes …");status.setText(data.optString("message","Venter på Windows-rutearbejderen."));
+            main.postDelayed(()->{if(!isFinishing()&&lastLocation!=null&&!fetching)fetchRoute(lastLocation);},5000);
+            return;
+        }
         remainingSeconds=data.optInt("duration",-1);receivedAt=SystemClock.elapsedRealtime();
         map.route(data.optJSONArray("geometry"));
         int meters=data.optInt("distance");distance.setText(meters<1000?meters+" m tilbage":String.format(Locale.forLanguageTag("da-DK"),"%.1f km tilbage",meters/1000.0));

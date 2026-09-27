@@ -85,7 +85,7 @@ public final class RouteMapView extends View {
             Bitmap bitmap=null;
             try {
                 HttpURLConnection con=(HttpURLConnection)new URL("https://tile.openstreetmap.org/"+key+".png").openConnection();
-                con.setRequestProperty("User-Agent","Busdrift-Navigator/4.0 (dk.busdrift.navigator)");con.setConnectTimeout(7000);con.setReadTimeout(7000);con.setUseCaches(true);
+                con.setRequestProperty("User-Agent","Busdrift-Navigator/5.0 (dk.busdrift.navigator)");con.setConnectTimeout(7000);con.setReadTimeout(7000);con.setUseCaches(true);
                 if(con.getResponseCode()==200){try(java.io.InputStream input=con.getInputStream()){bitmap=BitmapFactory.decodeStream(input);}}con.disconnect();
             }catch(Exception ignored){}
             Bitmap result=bitmap;
