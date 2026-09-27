@@ -54,16 +54,18 @@ function recordAddress(?string $json): string {
 }
 function route(PDO $db, int $driverId, string $date): array {
     $tours = q($db, "SELECT t.id,t.garage_id garageId,t.bus_id busId,TIME_FORMAT(t.start_time,'%H:%i') startTime,TIME_FORMAT(t.end_time,'%H:%i') endTime,t.stops,t.description,c.label customerName,g.label garageName,g.data garageData,b.label busName,b.data busData FROM tours t LEFT JOIN records c ON c.id=t.customer_id AND c.kind='kunde' LEFT JOIN records g ON g.id=t.garage_id AND g.kind='garage' LEFT JOIN records b ON b.id=t.bus_id AND b.kind='bus' WHERE t.driver_id=? AND t.date=? AND t.status NOT IN ('Aflyst','Annulleret') ORDER BY t.start_time,t.id", [$driverId,$date])->fetchAll(PDO::FETCH_ASSOC);
-    $waypoints=[]; $summaries=[]; $garageId=null; $garageName=''; $garageAddress=''; $lastTour=0; $section=0;
+    $waypoints=[]; $summaries=[]; $garageId=null; $busId=null; $garageName=''; $garageAddress=''; $lastTour=0; $section=0;
     foreach ($tours as $t) {
         $id=(int)$t['id']; $currentGarage=(int)$t['garageId']; $address=recordAddress($t['garageData']);
         if ($currentGarage<1 || $address==='') answer(409, ['error'=>'Tur '.$id.' mangler en garage med adresse. Ret turen i Busdrift.']);
+        $currentBus=(int)$t['busId'];
+        if ($currentBus<1) answer(409, ['error'=>'Tur '.$id.' mangler en bus. Ret turen i Busdrift.']);
         $stops=json_decode((string)$t['stops'], true);
         if (!is_array($stops) || count($stops)<2 || count($stops)>30) answer(409, ['error'=>'Tur '.$id.' mangler en gyldig stopliste.']);
-        if ($garageId !== $currentGarage) {
+        if ($garageId !== $currentGarage || $busId !== $currentBus) {
             if ($garageId !== null) $waypoints[]=['key'=>'garage:'.$section.':return','type'=>'garage_return','title'=>'Retur til '.$garageName,'address'=>$garageAddress,'tourId'=>$lastTour,'pause'=>0];
             $section++;
-            $garageId=$currentGarage; $garageName=(string)($t['garageName'] ?: 'Garage'); $garageAddress=$address;
+            $garageId=$currentGarage; $busId=$currentBus; $garageName=(string)($t['garageName'] ?: 'Garage'); $garageAddress=$address;
             $waypoints[]=['key'=>'garage:'.$section.':start','type'=>'garage_start','title'=>'Start ved '.$garageName,'address'=>$garageAddress,'tourId'=>$id,'pause'=>0];
         }
         $busData=json_decode((string)$t['busData'], true);

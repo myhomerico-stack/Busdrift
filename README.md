@@ -5,7 +5,7 @@ Android app og PHP 8.0 API til eksisterende Busdrift på `https://minside.hotser
 ## Kørsel på en arbejdsdag
 
 1. Administrator tildeler én eller flere ture til chaufføren, vælger garage og bus, og sørger for, at garage og turens stop har adresser. Chaufføren får sit eksisterende chaufførnummer og PIN under **Chaufførportal**.
-2. Chaufføren logger ind i appen. Dagens ture vises i tidsorden. Appen laver en stopliste: **garage → alle kundestop → tilbage til garage**. Hvis dagens ture bruger forskellige garager, indsættes et returbesøg og en ny garage, når garage skifter.
+2. Chaufføren logger ind i appen. Dagens ture vises i tidsorden. Appen laver en stopliste: **garage → alle kundestop → tilbage til garage**. Hvis dagens ture bruger forskellige garager eller busser, indsættes et returbesøg og en ny start ved garagen, når garage eller bus skifter.
 3. Chaufføren trykker **Start kørslen fra garagen**. Navigation til næste adresse åbnes i telefonens navigationsapp. Ved hvert stop markeres **Jeg er ankommet**, hvorefter appen åbner navigation til næste stop. GPS deles under kørslen, hvis chaufføren giver placeringstilladelse.
 4. Chaufføren markerer ankomsten til garagen og trykker **Afslut dagen og log ud**. Serveren registrerer afslutning og lukker den aktuelle telefons adgangsnøgle. En tidlig manuel logout afslutter ikke dagen.
 
