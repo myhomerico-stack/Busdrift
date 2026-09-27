@@ -8,7 +8,7 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 // Offentlig versionskontrol uden adgang til MySQL eller chaufførdata.
 if (($_GET['action'] ?? '') === 'version' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
-    echo json_encode(['navigator' => true, 'apiVersion' => 5, 'routeSource' => 'mysql', 'routeAction' => 'navigate']);
+    echo json_encode(['navigator' => true, 'apiVersion' => 5, 'diagnostics' => 'worker-heartbeat-5.1', 'routeSource' => 'mysql', 'routeAction' => 'navigate']);
     exit;
 }
 
